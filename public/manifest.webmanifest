@@ -1,13 +1,19 @@
 {
+  "id": "/",
   "name": "Magic Camera",
   "short_name": "Magic Camera",
   "description": "A playful magic camera for kids.",
+  "lang": "en",
+  "dir": "ltr",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "fullscreen"],
   "orientation": "portrait",
   "background_color": "#71CCE2",
   "theme_color": "#71CCE2",
+  "categories": ["entertainment", "photo", "kids"],
+  "prefer_related_applications": false,
   "icons": [
     {
       "src": "/icons/icon-192.png",

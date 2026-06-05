@@ -1,6 +1,6 @@
 // Magic Camera service worker — minimal offline shell.
 // We intentionally do NOT cache API calls or signed image URLs (private child data).
-const CACHE = 'magic-camera-v1';
+const CACHE = 'magic-camera-v2';
 const APP_SHELL = ['/', '/offline.html', '/manifest.webmanifest'];
 
 self.addEventListener('install', (event) => {

@@ -41,7 +41,15 @@ project so Vercel/builds use the right root — don't remove it.
   `supabaseBrowser`). Keep the `supabaseAdmin`/service-role import **out of** anything
   that ships to the browser.
 - `public/` — `manifest.webmanifest`, `sw.js` (network-first nav, never caches `/api/`
-  or cross-origin signed URLs), `offline.html`, generated `icons/`.
+  or cross-origin signed URLs; bump its `CACHE` constant when shipping PWA asset
+  changes), `offline.html`, generated `icons/`.
+- **PWA install:** `ServiceWorkerRegister.tsx` registers the SW **in production only**
+  (disabled in `next dev` to avoid stale caches) — so install/`beforeinstallprompt`
+  only work on the deployed HTTPS URL or `npm run build && npm run start`, never `npm
+  run dev`. `InstallPrompt.tsx` renders an "Add to Home Screen" button on the child
+  home: Chromium uses the captured `beforeinstallprompt`; iOS Safari (no install API)
+  shows manual Share→Add-to-Home-Screen steps; it renders nothing once installed
+  (`display-mode: standalone`).
 
 ## What this product is
 

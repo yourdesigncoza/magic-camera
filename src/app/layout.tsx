@@ -12,6 +12,11 @@ export const metadata: Metadata = {
     statusBarStyle: 'black-translucent',
     title: 'Magic Camera',
   },
+  // Next emits the modern `mobile-web-app-capable`; older iOS Safari still
+  // looks for the legacy tag to launch in standalone (no browser chrome).
+  other: {
+    'apple-mobile-web-app-capable': 'yes',
+  },
   icons: {
     icon: [
       { url: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },

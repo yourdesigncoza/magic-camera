@@ -9,6 +9,7 @@ import { PublicPreset } from '@/lib/types';
 import CameraView from './CameraView';
 import PresetGrid from './PresetGrid';
 import HiddenParentAccess from './HiddenParentAccess';
+import InstallPrompt from './InstallPrompt';
 
 type Step = 'loading' | 'home' | 'camera' | 'preview' | 'creating' | 'result' | 'error';
 
@@ -201,6 +202,7 @@ export default function CameraApp() {
         <Link href="/gallery" className="btn-secondary w-full">
           🖼️ My Gallery
         </Link>
+        <InstallPrompt />
       </div>
     </div>
   );
