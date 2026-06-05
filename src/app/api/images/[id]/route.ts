@@ -43,7 +43,9 @@ export async function GET(
   });
 }
 
-// DELETE /api/images/:id?scope=all|original|generated  — parent only.
+// DELETE /api/images/:id?scope=all|original|generated
+// Authorized by EITHER the owning device's token (child gallery) OR a parent
+// session for the owning device. Both remove the data from Supabase.
 export async function DELETE(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
@@ -56,9 +58,12 @@ export async function DELETE(
   const image = data as ImageRow | null;
   if (!image) return jsonError('Not found', 404);
 
-  // Must be an authenticated parent for the device that owns this image.
+  // Authorize: the device that owns the image (via its token), or a parent
+  // session bound to that device.
+  const callerDeviceId = getRequestDeviceId(req);
+  const isOwnerDevice = !!callerDeviceId && callerDeviceId === image.device_id;
   const parentDeviceId = await getParentDeviceId(image.device_id ?? undefined);
-  if (!parentDeviceId) return jsonError('Unauthorized', 401);
+  if (!isOwnerDevice && !parentDeviceId) return jsonError('Unauthorized', 401);
 
   if (scope === 'original' || scope === 'all') {
     if (image.original_path) await removeObjects(BUCKET_ORIGINALS, [image.original_path]);

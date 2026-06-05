@@ -33,7 +33,11 @@ project so Vercel/builds use the right root — don't remove it.
   client-side **state machine** (`home → camera → preview → creating → result`), not
   routes. The captured photo Blob lives in memory across steps, so don't split these
   steps into separate pages.
-- `src/app/gallery/page.tsx`, `src/app/parent/page.tsx` — separate routes.
+- `src/app/gallery/page.tsx`, `src/app/parent/page.tsx` — separate routes. The child
+  gallery is **local-first**: generated images are cached on-device in IndexedDB
+  (`src/lib/localGallery.ts`), so it reads from the device (instant/offline) and migrates
+  any server images into the cache once rather than re-downloading each open. Deleting
+  there removes the Supabase copy (device-token DELETE) **and** the local cache entry.
 - `src/app/api/**` — all server logic. Every route is `runtime = 'nodejs'`, most are
   `force-dynamic`. `images/generate` sets `maxDuration = 60`.
 - `src/lib/**` — server libs (`supabaseAdmin`, `storage`, `openai`, `device`,
@@ -93,8 +97,10 @@ get-or-creates a `devices` row and returns an **HMAC-signed device token**
 (`src/lib/deviceToken.ts`). The client stores that token and sends it as the
 `x-device-token` header on every child endpoint; the server derives the *authoritative*
 deviceId from the signature (never trust a client-supplied deviceId — that was an IDOR).
-Child routes (`create-upload`, `mark-uploaded`, `generate`, `images/[id]` GET, `gallery`
-child scope) all 401 without a valid token and scope every query by the token's deviceId.
+Child routes (`create-upload`, `mark-uploaded`, `generate`, `images/[id]` GET + DELETE,
+`gallery` child scope) all 401 without a valid token and scope every query by the token's
+deviceId. `DELETE /api/images/[id]` is authorized by **either** the owning device's token
+(child gallery delete) **or** a parent session — both remove the DB row + storage objects.
 Parent mode binds to the device via a separate HMAC-signed httpOnly cookie
 (`src/lib/parentAuth.ts`), `sameSite: 'lax'`.
 

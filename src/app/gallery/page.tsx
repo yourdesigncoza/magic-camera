@@ -7,6 +7,7 @@ import { saveImage } from '@/lib/saveImage';
 import {
   listLocalImages,
   cacheImageFromUrl,
+  deleteLocalImage,
   isSupported,
   LocalImage,
 } from '@/lib/localGallery';
@@ -30,7 +31,43 @@ export default function GalleryPage() {
   const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
   const [active, setActive] = useState<Item | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const objectUrls = useRef<string[]>([]);
+
+  const openImage = (item: Item) => {
+    setConfirmDelete(false);
+    setActive(item);
+  };
+
+  const closeImage = () => {
+    setConfirmDelete(false);
+    setActive(null);
+  };
+
+  const handleDelete = async () => {
+    if (!active) return;
+    setDeleting(true);
+    try {
+      // Remove from Supabase (DB row + storage objects). 404 = already gone.
+      const res = await fetch(`/api/images/${active.id}`, {
+        method: 'DELETE',
+        headers: authHeaders(),
+      });
+      if (!res.ok && res.status !== 404) {
+        setDeleting(false);
+        return; // leave the image in place on a real failure
+      }
+      // Remove from the on-device cache and the grid.
+      await deleteLocalImage(active.id).catch(() => {});
+      URL.revokeObjectURL(active.url);
+      objectUrls.current = objectUrls.current.filter((u) => u !== active.url);
+      setItems((prev) => prev.filter((i) => i.id !== active.id));
+      closeImage();
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   // Build display items from local blobs, tracking object URLs for cleanup.
   const toItems = (local: LocalImage[]): Item[] => {
@@ -127,7 +164,7 @@ export default function GalleryPage() {
           {items.map((item) => (
             <button
               key={item.id}
-              onClick={() => setActive(item)}
+              onClick={() => openImage(item)}
               className="overflow-hidden rounded-toy bg-camera-blue-light shadow-soft"
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -145,24 +182,54 @@ export default function GalleryPage() {
       {active && (
         <div
           className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-charcoal/95 p-4"
-          onClick={() => setActive(null)}
+          onClick={closeImage}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={active.url}
             alt={active.presetLabel ?? 'Magic photo'}
-            className="max-h-[72dvh] w-auto rounded-toy-lg object-contain"
+            className="max-h-[64dvh] w-auto rounded-toy-lg object-contain"
           />
           <div
             className="mt-6 flex w-full max-w-xs flex-col gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <button className="btn-primary" onClick={() => saveImage(active.url)}>
-              📤 Share Image
-            </button>
-            <button className="btn-secondary" onClick={() => setActive(null)}>
-              Close
-            </button>
+            {confirmDelete ? (
+              <>
+                <p className="text-center font-bold text-paper-white">
+                  Delete this photo?
+                </p>
+                <button
+                  className="btn-primary !bg-red-500 !text-white"
+                  onClick={handleDelete}
+                  disabled={deleting}
+                >
+                  {deleting ? 'Deleting…' : '🗑️ Yes, delete'}
+                </button>
+                <button
+                  className="btn-secondary"
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                >
+                  Keep it
+                </button>
+              </>
+            ) : (
+              <>
+                <button className="btn-primary" onClick={() => saveImage(active.url)}>
+                  📤 Share Image
+                </button>
+                <button
+                  className="btn-secondary !bg-red-100 !text-red-700"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  🗑️ Delete
+                </button>
+                <button className="btn-secondary" onClick={closeImage}>
+                  Close
+                </button>
+              </>
+            )}
           </div>
         </div>
       )}
