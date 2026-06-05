@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { registerDevice, authHeaders } from '@/lib/clientDevice';
+import { saveImage } from '@/lib/saveImage';
 
 interface GalleryItem {
   id: string;
@@ -81,11 +82,19 @@ export default function GalleryPage() {
           <img
             src={active.url!}
             alt={active.presetLabel ?? 'Magic photo'}
-            className="max-h-[80dvh] w-auto rounded-toy-lg object-contain"
+            className="max-h-[72dvh] w-auto rounded-toy-lg object-contain"
           />
-          <button className="btn-primary mt-6 max-w-xs" onClick={() => setActive(null)}>
-            Close
-          </button>
+          <div
+            className="mt-6 flex w-full max-w-xs flex-col gap-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button className="btn-primary" onClick={() => saveImage(active.url!)}>
+              💾 Save to Phone
+            </button>
+            <button className="btn-secondary" onClick={() => setActive(null)}>
+              Close
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { registerDevice, DeviceInfo } from '@/lib/clientDevice';
 import { CapturedImage } from '@/lib/imageCapture';
 import { runGeneration, FlowError } from '@/lib/generateFlow';
 import { PublicPreset } from '@/lib/types';
+import { saveImage } from '@/lib/saveImage';
 import CameraView from './CameraView';
 import PresetGrid from './PresetGrid';
 import HiddenParentAccess from './HiddenParentAccess';
@@ -144,6 +145,9 @@ export default function CameraApp() {
             📸 New
           </button>
         </div>
+        <button className="btn-secondary w-full" onClick={() => saveImage(resultUrl)}>
+          💾 Save to Phone
+        </button>
         <Link href="/gallery" className="btn-secondary w-full">
           🖼️ My Gallery
         </Link>
