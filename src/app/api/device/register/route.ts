@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { getOrCreateDevice, checkQuota } from '@/lib/device';
 import { getParentSettings } from '@/lib/parentAuth';
+import { createDeviceToken } from '@/lib/deviceToken';
 import { jsonError, jsonOk } from '@/lib/http';
 
 export const runtime = 'nodejs';
@@ -27,6 +28,8 @@ export async function POST(req: NextRequest) {
 
   return jsonOk({
     deviceId: device.id,
+    // Authenticates subsequent child-mode requests (sent as x-device-token).
+    deviceToken: createDeviceToken(device.id),
     dailyLimit: device.daily_limit,
     used: quota.used,
     isActive: device.is_active,

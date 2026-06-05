@@ -80,9 +80,25 @@ mark-uploaded → generate.
 Status state machine: `pending → uploaded → processing → completed | failed`. Persist `failed` jobs with an error message rather than throwing them away. A failed generation does **not** burn quota — `countGenerationsToday` only counts `generation_success` usage_logs rows.
 
 **Device identity (not in the PRD):** there is no auth/login. Each install generates a
-random `device_code` stored in `localStorage` and calls `POST /api/device/register`, which
-get-or-creates a `devices` row. Single phone = single device. Parent mode binds to that
-device id via an HMAC-signed httpOnly cookie (`src/lib/parentAuth.ts`).
+random `device_code` in `localStorage` and calls `POST /api/device/register`, which
+get-or-creates a `devices` row and returns an **HMAC-signed device token**
+(`src/lib/deviceToken.ts`). The client stores that token and sends it as the
+`x-device-token` header on every child endpoint; the server derives the *authoritative*
+deviceId from the signature (never trust a client-supplied deviceId — that was an IDOR).
+Child routes (`create-upload`, `mark-uploaded`, `generate`, `images/[id]` GET, `gallery`
+child scope) all 401 without a valid token and scope every query by the token's deviceId.
+Parent mode binds to the device via a separate HMAC-signed httpOnly cookie
+(`src/lib/parentAuth.ts`), `sameSite: 'lax'`.
+
+**Quota is race-safe:** `/generate` reserves a slot via the `increment_usage_if_allowed`
+Postgres RPC (per-device `pg_advisory_xact_lock` + count-under-limit + insert, all atomic),
+then refunds it on failure (`refundGenerationSlot`). Do not revert this to a JS
+check-then-act — concurrent requests would blow past the daily limit. `create-upload` keeps
+a cheap non-authoritative pre-check for UX only.
+
+**Supabase key names:** the code accepts both legacy and new key formats —
+`NEXT_PUBLIC_SUPABASE_ANON_KEY` or `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (browser), and
+`SUPABASE_SERVICE_ROLE_KEY` or `SUPABASE_SECRET_KEY` (server).
 
 ### Fail-closed cost control
 

@@ -1,6 +1,7 @@
 'use client';
 
 const KEY = 'mc_device_code';
+const TOKEN_KEY = 'mc_device_token';
 
 // Stable per-install device code stored in localStorage.
 export function getDeviceCode(): string {
@@ -16,8 +17,20 @@ export function getDeviceCode(): string {
   return code;
 }
 
+export function getDeviceToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+// Headers that authenticate child-mode requests to the server.
+export function authHeaders(): Record<string, string> {
+  const token = getDeviceToken();
+  return token ? { 'x-device-token': token } : {};
+}
+
 export interface DeviceInfo {
   deviceId: string;
+  deviceToken: string;
   dailyLimit: number;
   used: number;
   isActive: boolean;
@@ -31,5 +44,9 @@ export async function registerDevice(): Promise<DeviceInfo> {
     body: JSON.stringify({ deviceCode: getDeviceCode() }),
   });
   if (!res.ok) throw new Error('Could not register device');
-  return res.json();
+  const info: DeviceInfo = await res.json();
+  if (info.deviceToken && typeof window !== 'undefined') {
+    window.localStorage.setItem(TOKEN_KEY, info.deviceToken);
+  }
+  return info;
 }

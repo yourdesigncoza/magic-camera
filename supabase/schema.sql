@@ -95,6 +95,48 @@ on conflict (id) do nothing;
 -- No storage policies are added: anon/public cannot read or write. The server
 -- uses the service-role key + short-lived signed URLs for all access.
 
+-- ── Atomic quota reservation ────────────────────────────────────────────────
+-- Race-safe "check daily limit and consume one slot" used by /api/images/generate.
+-- A per-device transaction-scoped advisory lock serialises concurrent requests
+-- from the same device, so N parallel generations can't all pass the check.
+-- Returns true and logs a generation_success row if a slot was available.
+create or replace function increment_usage_if_allowed(
+  p_device_id uuid,
+  p_image_id uuid default null
+)
+returns boolean
+language plpgsql
+as $$
+declare
+  v_limit int;
+  v_active boolean;
+  v_count int;
+  v_day_start timestamptz := date_trunc('day', now() at time zone 'utc') at time zone 'utc';
+begin
+  -- Serialise per device for the duration of the transaction.
+  perform pg_advisory_xact_lock(hashtextextended(p_device_id::text, 0));
+
+  select daily_limit, is_active into v_limit, v_active
+  from devices where id = p_device_id;
+
+  if v_limit is null then return false; end if;  -- unknown device
+  if not v_active then return false; end if;       -- locked / inactive
+
+  select count(*) into v_count
+  from usage_logs
+  where device_id = p_device_id
+    and event_type = 'generation_success'
+    and created_at >= v_day_start;
+
+  if v_count >= v_limit then return false; end if;
+
+  insert into usage_logs (device_id, image_id, event_type)
+  values (p_device_id, p_image_id, 'generation_success');
+
+  return true;
+end;
+$$;
+
 -- ── Seed presets (per PRD §18) ──────────────────────────────────────────────
 insert into presets (name, label, emoji, prompt, is_enabled, sort_order) values
 ('superhero', 'Superhero', '🦸',

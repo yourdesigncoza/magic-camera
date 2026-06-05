@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { PresetRow } from '@/lib/types';
 import ParentGallery from './ParentGallery';
 
@@ -81,9 +82,12 @@ export default function ParentDashboard({
         <header className="flex items-center justify-between">
           <h1 className="text-xl font-extrabold text-charcoal">Parent Dashboard</h1>
           <div className="flex gap-2">
-            <a href="/" className="rounded-lg bg-paper-white px-4 py-2 text-sm font-bold text-slate">
+            <Link
+              href="/"
+              className="rounded-lg bg-paper-white px-4 py-2 text-sm font-bold text-slate"
+            >
               Camera
-            </a>
+            </Link>
             <button
               onClick={logout}
               className="rounded-lg bg-charcoal px-4 py-2 text-sm font-bold text-paper-white"

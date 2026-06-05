@@ -32,11 +32,11 @@ routes with the service-role key, plus short-lived signed URLs for the browser.
 | Variable | Where | Notes |
 |---|---|---|
 | `NEXT_PUBLIC_SUPABASE_URL` | browser + server | Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | browser + server | anon key (used only to PUT originals to signed URLs) |
-| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | service-role key — never expose |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | browser + server | anon key (used only to PUT originals to signed URLs). New projects: `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` (`sb_publishable_…`) also works |
+| `SUPABASE_SERVICE_ROLE_KEY` | **server only** | service-role key — never expose. New projects: `SUPABASE_SECRET_KEY` (`sb_secret_…`) also works |
 | `OPENAI_API_KEY` | **server only** | image generation |
 | `OPENAI_IMAGE_MODEL` | server | optional, defaults to `gpt-image-1` |
-| `PARENT_PIN_SECRET` | **server only** | `openssl rand -hex 32` — signs parent cookies, salts PINs |
+| `PARENT_PIN_SECRET` | **server only** | `openssl rand -hex 32` — signs parent cookies **and device tokens**, salts PINs. Changing it logs out all parents and invalidates all device tokens |
 
 ## 3. Deploy to Vercel
 

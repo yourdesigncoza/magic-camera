@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createSignedRead } from '@/lib/storage';
 import { BUCKET_GENERATED, BUCKET_ORIGINALS } from '@/lib/constants';
 import { getParentDeviceId } from '@/lib/parentAuth';
+import { getRequestDeviceId } from '@/lib/deviceToken';
 import { jsonError, jsonOk } from '@/lib/http';
 
 export const runtime = 'nodejs';
@@ -21,14 +22,20 @@ interface GalleryRow {
 // child  -> completed generated images only, signed display URLs.
 // parent -> requires parent session; also returns original signed URLs.
 export async function GET(req: NextRequest) {
-  const deviceId = req.nextUrl.searchParams.get('deviceId');
   const scope = req.nextUrl.searchParams.get('scope') || 'child';
-  if (!deviceId) return jsonError('deviceId is required');
 
+  // Resolve the authoritative deviceId per scope: parent scope uses the signed
+  // parent-session cookie; child scope uses the signed device token. Neither
+  // trusts a raw client-supplied deviceId.
+  let deviceId: string | null;
   if (scope === 'parent') {
-    const parentDeviceId = await getParentDeviceId(deviceId);
-    if (!parentDeviceId) return jsonError('Unauthorized', 401);
+    deviceId = await getParentDeviceId(
+      req.nextUrl.searchParams.get('deviceId') ?? undefined,
+    );
+  } else {
+    deviceId = getRequestDeviceId(req);
   }
+  if (!deviceId) return jsonError('Unauthorized', 401);
 
   const query = supabaseAdmin()
     .from('images')

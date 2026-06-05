@@ -3,6 +3,7 @@ import { supabaseAdmin } from '@/lib/supabaseAdmin';
 import { createSignedRead, removeObjects } from '@/lib/storage';
 import { BUCKET_GENERATED, BUCKET_ORIGINALS } from '@/lib/constants';
 import { getParentDeviceId } from '@/lib/parentAuth';
+import { getRequestDeviceId } from '@/lib/deviceToken';
 import { jsonError, jsonOk } from '@/lib/http';
 import { ImageRow } from '@/lib/types';
 
@@ -12,14 +13,18 @@ export const dynamic = 'force-dynamic';
 // GET /api/images/:id -> { status, url, error }
 // Polled by the child UI while a generation is in flight.
 export async function GET(
-  _req: NextRequest,
+  req: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
+  const deviceId = getRequestDeviceId(req);
+  if (!deviceId) return jsonError('Unauthorized', 401);
+
   const { id } = await params;
   const { data } = await supabaseAdmin()
     .from('images')
     .select('id, status, generated_path, error_message')
     .eq('id', id)
+    .eq('device_id', deviceId) // ownership scope — only the owning device may poll
     .maybeSingle();
 
   const image = data as Pick<ImageRow, 'id' | 'status' | 'generated_path' | 'error_message'> | null;

@@ -87,3 +87,30 @@ export async function logUsage(
     image_id: imageId ?? null,
   });
 }
+
+// Atomically check the daily limit and consume one slot (race-safe via the
+// increment_usage_if_allowed RPC). Returns true if a slot was reserved.
+export async function reserveGenerationSlot(
+  deviceId: string,
+  imageId: string,
+): Promise<boolean> {
+  const { data, error } = await supabaseAdmin().rpc('increment_usage_if_allowed', {
+    p_device_id: deviceId,
+    p_image_id: imageId,
+  });
+  if (error) throw new Error(`quota RPC failed: ${error.message}`);
+  return data === true;
+}
+
+// Refund a reserved slot when generation ultimately fails (failures don't burn quota).
+export async function refundGenerationSlot(
+  deviceId: string,
+  imageId: string,
+): Promise<void> {
+  await supabaseAdmin()
+    .from('usage_logs')
+    .delete()
+    .eq('device_id', deviceId)
+    .eq('image_id', imageId)
+    .eq('event_type', EVENT_GENERATION_SUCCESS);
+}

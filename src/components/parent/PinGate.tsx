@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 
 interface Props {
   deviceId: string;
@@ -94,9 +95,12 @@ export default function PinGate({ deviceId, mode, onSuccess }: Props) {
           {busy ? '…' : mode === 'create' ? 'Save PIN' : 'Unlock'}
         </button>
 
-        <a href="/" className="mt-3 block text-center text-sm font-semibold text-slate">
+        <Link
+          href="/"
+          className="mt-3 block text-center text-sm font-semibold text-slate"
+        >
           ← Back to camera
-        </a>
+        </Link>
       </div>
     </div>
   );

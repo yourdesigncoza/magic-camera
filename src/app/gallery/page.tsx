@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { registerDevice } from '@/lib/clientDevice';
+import { registerDevice, authHeaders } from '@/lib/clientDevice';
 
 interface GalleryItem {
   id: string;
@@ -19,8 +19,8 @@ export default function GalleryPage() {
   useEffect(() => {
     (async () => {
       try {
-        const dev = await registerDevice();
-        const res = await fetch(`/api/gallery?deviceId=${dev.deviceId}&scope=child`);
+        await registerDevice(); // ensures the device token is present
+        const res = await fetch('/api/gallery?scope=child', { headers: authHeaders() });
         const data = await res.json();
         setItems((data.items ?? []).filter((i: GalleryItem) => i.url));
       } catch {

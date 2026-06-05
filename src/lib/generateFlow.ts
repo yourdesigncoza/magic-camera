@@ -1,6 +1,7 @@
 'use client';
 
 import { supabaseBrowser } from './supabaseBrowser';
+import { authHeaders } from './clientDevice';
 
 export class FlowError extends Error {
   code: string;
@@ -13,7 +14,7 @@ export class FlowError extends Error {
 async function postJson(url: string, body: unknown) {
   const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...authHeaders() },
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
@@ -26,14 +27,13 @@ export interface GenerateOutcome {
 }
 
 // Full child-flow pipeline: create-upload → upload original → mark-uploaded → generate.
+// Device identity is carried by the signed x-device-token header (authHeaders()).
 export async function runGeneration(
-  deviceId: string,
   image: { blob: Blob; contentType: string },
   presetId: string,
 ): Promise<GenerateOutcome> {
   // 1. Ask the server for an image record + signed upload target.
   const create = await postJson('/api/images/create-upload', {
-    deviceId,
     contentType: image.contentType,
   });
   if (create.res.status === 429) {

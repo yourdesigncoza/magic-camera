@@ -52,7 +52,6 @@ export default function CameraApp() {
     setStep('creating');
     try {
       const { url } = await runGeneration(
-        device.deviceId,
         { blob: captured.blob, contentType: captured.contentType },
         presetId,
       );
