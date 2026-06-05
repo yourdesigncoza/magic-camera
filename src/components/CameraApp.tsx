@@ -12,6 +12,13 @@ import CameraView from './CameraView';
 import PresetGrid from './PresetGrid';
 import HiddenParentAccess from './HiddenParentAccess';
 import InstallPrompt from './InstallPrompt';
+import {
+  RefreshIcon,
+  CameraIcon,
+  ShareIcon,
+  WallpaperIcon,
+  GalleryIcon,
+} from './icons';
 
 type Step = 'loading' | 'home' | 'camera' | 'preview' | 'creating' | 'result' | 'error';
 
@@ -188,34 +195,40 @@ export default function CameraApp() {
             className="mx-auto max-h-[60dvh] w-auto rounded-toy object-contain"
           />
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <button className="btn-primary" onClick={() => setStep('preview')}>
-            ✨ Again
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            className="btn-tile bg-magic-yellow text-charcoal"
+            onClick={() => setStep('preview')}
+          >
+            <RefreshIcon /> Again
           </button>
           <button
-            className="btn-primary"
+            className="btn-tile bg-magic-yellow text-charcoal"
             onClick={() => {
               resetPhoto();
               setStep('camera');
             }}
           >
-            📸 New
+            <CameraIcon /> New
           </button>
         </div>
-        <div className="grid grid-cols-2 gap-3">
-          <button className="btn-secondary" onClick={() => saveImage(resultUrl)}>
-            📤 Share
+        <div className="grid grid-cols-2 gap-2.5">
+          <button
+            className="btn-tile bg-camera-blue-light text-charcoal"
+            onClick={() => saveImage(resultUrl)}
+          >
+            <ShareIcon /> Share
           </button>
           <button
-            className="btn-secondary"
+            className="btn-tile bg-camera-blue-light text-charcoal"
             onClick={handleWallpaper}
             disabled={wallpaperBusy || resultUrl.startsWith('data:')}
           >
-            {wallpaperBusy ? 'Making…' : '📱 Wallpaper'}
+            <WallpaperIcon /> {wallpaperBusy ? 'Making…' : 'Wallpaper'}
           </button>
         </div>
-        <Link href="/gallery" className="btn-secondary w-full">
-          🖼️ My Gallery
+        <Link href="/gallery" className="btn-tile bg-paper-white text-slate">
+          <GalleryIcon /> My Gallery
         </Link>
       </div>
     );

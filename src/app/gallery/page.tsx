@@ -3,7 +3,8 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { registerDevice, authHeaders } from '@/lib/clientDevice';
-import { saveImage } from '@/lib/saveImage';
+import { saveImage, downloadImage } from '@/lib/saveImage';
+import { ShareIcon, DownloadIcon, TrashIcon, CloseIcon } from '@/components/icons';
 import {
   listLocalImages,
   cacheImageFromUrl,
@@ -191,7 +192,7 @@ export default function GalleryPage() {
             className="max-h-[64dvh] w-auto rounded-toy-lg object-contain"
           />
           <div
-            className="mt-6 flex w-full max-w-xs flex-col gap-3"
+            className="mt-6 flex w-full max-w-xs flex-col gap-2.5"
             onClick={(e) => e.stopPropagation()}
           >
             {confirmDelete ? (
@@ -200,14 +201,14 @@ export default function GalleryPage() {
                   Delete this photo?
                 </p>
                 <button
-                  className="btn-primary !bg-red-500 !text-white"
+                  className="btn-tile bg-red-500 text-white"
                   onClick={handleDelete}
                   disabled={deleting}
                 >
-                  {deleting ? 'Deleting…' : '🗑️ Yes, delete'}
+                  <TrashIcon /> {deleting ? 'Deleting…' : 'Yes, delete'}
                 </button>
                 <button
-                  className="btn-secondary"
+                  className="btn-tile bg-paper-white text-slate"
                   onClick={() => setConfirmDelete(false)}
                   disabled={deleting}
                 >
@@ -216,17 +217,29 @@ export default function GalleryPage() {
               </>
             ) : (
               <>
-                <button className="btn-primary" onClick={() => saveImage(active.url)}>
-                  📤 Share Image
+                <button
+                  className="btn-tile bg-magic-yellow text-charcoal"
+                  onClick={() => saveImage(active.url)}
+                >
+                  <ShareIcon /> Share
                 </button>
                 <button
-                  className="btn-secondary !bg-red-100 !text-red-700"
+                  className="btn-tile bg-camera-blue-light text-charcoal"
+                  onClick={() => downloadImage(active.url)}
+                >
+                  <DownloadIcon /> Download
+                </button>
+                <button
+                  className="btn-tile bg-red-100 text-red-600"
                   onClick={() => setConfirmDelete(true)}
                 >
-                  🗑️ Delete
+                  <TrashIcon /> Delete
                 </button>
-                <button className="btn-secondary" onClick={closeImage}>
-                  Close
+                <button
+                  className="btn-tile bg-paper-white text-slate"
+                  onClick={closeImage}
+                >
+                  <CloseIcon /> Close
                 </button>
               </>
             )}

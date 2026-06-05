@@ -39,6 +39,25 @@ export async function saveImage(
   }
 
   // Fallback: trigger a download via an object URL.
+  triggerDownload(blob, filename);
+}
+
+// Directly download the image file to the device (no share sheet). On mobile
+// this saves to the Downloads folder; desktop saves to the default location.
+export async function downloadImage(
+  url: string,
+  filename = `magic-${Date.now()}.webp`,
+): Promise<void> {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed');
+    triggerDownload(await res.blob(), filename);
+  } catch {
+    window.open(url, '_blank'); // CORS-blocked: open so the user can long-press save
+  }
+}
+
+function triggerDownload(blob: Blob, filename: string): void {
   const objectUrl = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = objectUrl;

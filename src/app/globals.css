@@ -54,6 +54,15 @@ body {
       disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  /* Uniform action button (result + gallery viewer): consistent size/font,
+     icon + label, slightly smaller than the big primary button. Pair with a
+     bg-* / text-* colour utility. */
+  .btn-tile {
+    @apply no-select flex min-h-[52px] w-full items-center justify-center gap-2
+      rounded-toy px-4 text-base font-bold shadow-soft transition-transform
+      active:translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
   /* Large tappable preset tile. */
   .preset-tile {
     @apply no-select flex aspect-square flex-col items-center justify-center gap-2
