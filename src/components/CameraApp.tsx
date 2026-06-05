@@ -7,6 +7,7 @@ import { CapturedImage } from '@/lib/imageCapture';
 import { runGeneration, FlowError } from '@/lib/generateFlow';
 import { PublicPreset } from '@/lib/types';
 import { saveImage } from '@/lib/saveImage';
+import { cacheImageFromUrl } from '@/lib/localGallery';
 import CameraView from './CameraView';
 import PresetGrid from './PresetGrid';
 import HiddenParentAccess from './HiddenParentAccess';
@@ -53,11 +54,20 @@ export default function CameraApp() {
     if (!device || !captured) return;
     setStep('creating');
     try {
-      const { url } = await runGeneration(
+      const { imageId, url } = await runGeneration(
         { blob: captured.blob, contentType: captured.contentType },
         presetId,
       );
       setResultUrl(url);
+      // Cache the result on-device so the gallery never re-downloads it.
+      const preset = presets.find((p) => p.id === presetId);
+      cacheImageFromUrl(imageId, url, {
+        presetLabel: preset?.label ?? null,
+        presetEmoji: preset?.emoji ?? null,
+        createdAt: new Date().toISOString(),
+      }).catch(() => {
+        /* offline cache is best-effort */
+      });
       setStep('result');
     } catch (err) {
       const msg =

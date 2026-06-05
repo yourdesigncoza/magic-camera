@@ -1,35 +1,104 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { registerDevice, authHeaders } from '@/lib/clientDevice';
 import { saveImage } from '@/lib/saveImage';
+import {
+  listLocalImages,
+  cacheImageFromUrl,
+  isSupported,
+  LocalImage,
+} from '@/lib/localGallery';
 
-interface GalleryItem {
+interface Item {
   id: string;
-  url: string | null;
+  url: string; // object URL (local blob) or remote URL fallback
   presetEmoji: string | null;
   presetLabel: string | null;
 }
 
+interface ServerItem {
+  id: string;
+  url: string | null;
+  presetLabel: string | null;
+  presetEmoji: string | null;
+  createdAt: string;
+}
+
 export default function GalleryPage() {
-  const [items, setItems] = useState<GalleryItem[]>([]);
+  const [items, setItems] = useState<Item[]>([]);
   const [loading, setLoading] = useState(true);
-  const [active, setActive] = useState<GalleryItem | null>(null);
+  const [active, setActive] = useState<Item | null>(null);
+  const objectUrls = useRef<string[]>([]);
+
+  // Build display items from local blobs, tracking object URLs for cleanup.
+  const toItems = (local: LocalImage[]): Item[] => {
+    // Revoke any previously-created URLs before making new ones.
+    objectUrls.current.forEach((u) => URL.revokeObjectURL(u));
+    objectUrls.current = [];
+    return local.map((img) => {
+      const url = URL.createObjectURL(img.blob);
+      objectUrls.current.push(url);
+      return {
+        id: img.id,
+        url,
+        presetEmoji: img.presetEmoji,
+        presetLabel: img.presetLabel,
+      };
+    });
+  };
 
   useEffect(() => {
+    let cancelled = false;
+
     (async () => {
-      try {
-        await registerDevice(); // ensures the device token is present
-        const res = await fetch('/api/gallery?scope=child', { headers: authHeaders() });
-        const data = await res.json();
-        setItems((data.items ?? []).filter((i: GalleryItem) => i.url));
-      } catch {
-        setItems([]);
-      } finally {
+      if (!isSupported()) {
+        setLoading(false);
+        return;
+      }
+      // 1. Show whatever is already on the device — instant, no network.
+      const local = await listLocalImages();
+      if (!cancelled) {
+        setItems(toItems(local));
         setLoading(false);
       }
+
+      // 2. One-time migration: pull any server images not yet cached locally,
+      //    then they live on-device and never re-download.
+      try {
+        await registerDevice();
+        const res = await fetch('/api/gallery?scope=child', { headers: authHeaders() });
+        const data = await res.json();
+        const server: ServerItem[] = data.items ?? [];
+        let added = false;
+        for (const s of server) {
+          if (!s.url) continue;
+          try {
+            const cached = await cacheImageFromUrl(s.id, s.url, {
+              presetLabel: s.presetLabel,
+              presetEmoji: s.presetEmoji,
+              createdAt: s.createdAt,
+            });
+            if (cached) added = true;
+          } catch {
+            /* skip images that fail to download */
+          }
+        }
+        if (added && !cancelled) {
+          setItems(toItems(await listLocalImages()));
+        }
+      } catch {
+        /* offline or unauthorized — local images are enough */
+      }
     })();
+
+    return () => {
+      cancelled = true;
+      objectUrls.current.forEach((u) => URL.revokeObjectURL(u));
+      objectUrls.current = [];
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -63,7 +132,7 @@ export default function GalleryPage() {
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={item.url!}
+                src={item.url}
                 alt={item.presetLabel ?? 'Magic photo'}
                 className="aspect-square w-full object-cover"
                 loading="lazy"
@@ -80,7 +149,7 @@ export default function GalleryPage() {
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={active.url!}
+            src={active.url}
             alt={active.presetLabel ?? 'Magic photo'}
             className="max-h-[72dvh] w-auto rounded-toy-lg object-contain"
           />
@@ -88,7 +157,7 @@ export default function GalleryPage() {
             className="mt-6 flex w-full max-w-xs flex-col gap-3"
             onClick={(e) => e.stopPropagation()}
           >
-            <button className="btn-primary" onClick={() => saveImage(active.url!)}>
+            <button className="btn-primary" onClick={() => saveImage(active.url)}>
               💾 Save to Phone
             </button>
             <button className="btn-secondary" onClick={() => setActive(null)}>
