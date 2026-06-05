@@ -1,68 +1,41 @@
 'use client';
 
 import { useEffect, useState } from 'react';
+import {
+  initInstallCapture,
+  getInstallState,
+  subscribe,
+  promptInstall,
+} from '@/lib/pwaInstall';
 
-// The Chromium "app can be installed" event (not in the standard lib types).
-interface BeforeInstallPromptEvent extends Event {
-  prompt: () => Promise<void>;
-  userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-function isStandalone(): boolean {
-  if (typeof window === 'undefined') return false;
-  return (
-    window.matchMedia('(display-mode: standalone)').matches ||
-    (window.navigator as unknown as { standalone?: boolean }).standalone === true
-  );
-}
-
-// "Add to Home Screen" button. Always visible (until installed), because Chrome's
-// beforeinstallprompt is unreliable and never fires on non-Chromium browsers.
-// On click:
-//   - if we captured beforeinstallprompt → fire the native install dialog;
-//   - iOS Safari → show Share → Add to Home Screen steps;
-//   - anything else → show generic "use the browser menu" steps.
+// "Add to Home Screen" button. Always visible until installed. Reads the
+// globally-captured install event (see pwaInstall.ts) so a real one-tap install
+// works even though this button mounts after the event has already fired.
+//   - captured prompt available → fire the native install dialog;
+//   - iOS Safari → Share → Add to Home Screen steps;
+//   - otherwise → generic "use the browser menu" steps.
 export default function InstallPrompt() {
-  const [deferred, setDeferred] = useState<BeforeInstallPromptEvent | null>(null);
-  const [installed, setInstalled] = useState(false);
+  const [, force] = useState(0);
   const [isIOS, setIsIOS] = useState(false);
   const [help, setHelp] = useState<null | 'ios' | 'generic'>(null);
 
   useEffect(() => {
-    if (isStandalone()) {
-      setInstalled(true);
-      return;
-    }
+    initInstallCapture();
+    const unsub = subscribe(() => force((n) => n + 1));
     const ua = window.navigator.userAgent.toLowerCase();
-    const ios =
+    setIsIOS(
       /iphone|ipad|ipod/.test(ua) ||
-      (ua.includes('macintosh') && navigator.maxTouchPoints > 1);
-    setIsIOS(ios);
-
-    const onBeforeInstall = (e: Event) => {
-      e.preventDefault();
-      setDeferred(e as BeforeInstallPromptEvent);
-    };
-    const onInstalled = () => {
-      setInstalled(true);
-      setDeferred(null);
-      setHelp(null);
-    };
-    window.addEventListener('beforeinstallprompt', onBeforeInstall);
-    window.addEventListener('appinstalled', onInstalled);
-    return () => {
-      window.removeEventListener('beforeinstallprompt', onBeforeInstall);
-      window.removeEventListener('appinstalled', onInstalled);
-    };
+        (ua.includes('macintosh') && navigator.maxTouchPoints > 1),
+    );
+    return unsub;
   }, []);
 
+  const { canPrompt, installed } = getInstallState();
   if (installed) return null;
 
   const onClick = async () => {
-    if (deferred) {
-      await deferred.prompt();
-      await deferred.userChoice;
-      setDeferred(null);
+    if (canPrompt) {
+      await promptInstall();
       return;
     }
     setHelp(isIOS ? 'ios' : 'generic');
@@ -105,9 +78,7 @@ export default function InstallPrompt() {
                 <li>
                   Tap <strong>Install app</strong> or <strong>Add to Home screen</strong>.
                 </li>
-                <li>
-                  Confirm — the Magic Camera icon appears on your home screen.
-                </li>
+                <li>Confirm — the Magic Camera icon appears on your home screen.</li>
               </ol>
             )}
             <button className="btn-primary" onClick={() => setHelp(null)}>
