@@ -14,7 +14,7 @@ create table if not exists devices (
   device_name text,
   device_code text unique,
   is_active boolean default true,
-  daily_limit int default 10,
+  daily_limit int default 20,
   created_at timestamptz default now(),
   updated_at timestamptz default now()
 );
