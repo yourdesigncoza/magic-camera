@@ -4,19 +4,50 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-This repo is **pre-implementation**. It currently contains only specification and design assets — no application code, no `package.json`, no git repo yet:
+The MVP is **implemented**: a Next.js (App Router, TS) PWA with the full server-side
+image pipeline, child + parent modes, and PWA assets. `next build` passes.
 
-- `PRD-Magic-Camera-PWA.md` — the authoritative spec. Read it before building anything; it defines scope, DB schema, API contract, storage layout, and safety rules.
-- `design/` — visual system (`design-system.md`, `design-tokens.json`, `magic-camera-theme.css`, `tailwind-theme-snippet.js`, `child-home-wireframe.svg`).
-- `README.md` — one-paragraph package summary.
+- `PRD-Magic-Camera-PWA.md` — the authoritative spec (scope, DB schema, API contract, storage, safety). Still the source of truth for *intent*.
+- `README.md` — setup + deploy guide (Supabase SQL, env vars, Vercel).
+- `supabase/schema.sql` — run once on a fresh Supabase project; creates tables, RLS, private buckets, seeds presets.
+- `design/` — original design assets, **git-ignored**. Tokens are mirrored into `tailwind.config.js` + `src/app/globals.css`, which are the runtime source of truth.
 
-When scaffolding the app, build it as a **Next.js PWA** (App Router) at the repo root, matching the stack in PRD §4 and §23. There is no build/test tooling yet — establish it during scaffolding.
+## Commands
+
+```bash
+npm install
+cp .env.example .env.local   # then fill in (see README "Environment variables")
+npm run dev                  # localhost:3000
+npm run build                # production build + type-check (the verification gate)
+npm run start                # serve the build
+```
+
+No test framework is wired up. `npm run build` is the check that must stay green —
+it type-checks the whole tree. There is a stray `package-lock.json` in a parent dir
+(`/home/laudes`); `outputFileTracingRoot` in `next.config.mjs` pins tracing to this
+project so Vercel/builds use the right root — don't remove it.
+
+## Where things live
+
+- `src/app/page.tsx` → `src/components/CameraApp.tsx` — the child flow is a single
+  client-side **state machine** (`home → camera → preview → creating → result`), not
+  routes. The captured photo Blob lives in memory across steps, so don't split these
+  steps into separate pages.
+- `src/app/gallery/page.tsx`, `src/app/parent/page.tsx` — separate routes.
+- `src/app/api/**` — all server logic. Every route is `runtime = 'nodejs'`, most are
+  `force-dynamic`. `images/generate` sets `maxDuration = 60`.
+- `src/lib/**` — server libs (`supabaseAdmin`, `storage`, `openai`, `device`,
+  `parentAuth`) and client libs (`clientDevice`, `imageCapture`, `generateFlow`,
+  `supabaseBrowser`). Keep the `supabaseAdmin`/service-role import **out of** anything
+  that ships to the browser.
+- `public/` — `manifest.webmanifest`, `sw.js` (network-first nav, never caches `/api/`
+  or cross-origin signed URLs), `offline.html`, generated `icons/`.
 
 ## What this product is
 
 A child-safe AI "toy camera" PWA for a 4-year-old, installed on an old Android phone. The child takes a photo → taps a large preset "magic" style → gets an AI-transformed image back in a private gallery. A PIN-gated parent mode controls cost, presets, and deletion. It must feel like a toy, never an AI tool.
 
-## Architecture (intended)
+## Architecture
 
 ```
 Android PWA → Next.js on Vercel → Next.js API routes (server-only)
@@ -39,9 +70,19 @@ Drives the whole image lifecycle; see PRD §10.5 and the API contract in §13:
 2. Client uploads original to `magic-originals` via the signed URL.
 3. `POST /api/images/mark-uploaded` — `status: uploaded`.
 4. `POST /api/images/generate` — server checks device daily limit, reads the preset prompt, calls OpenAI, uploads the result to `magic-generated`, sets `status: completed` (or `failed` + `error_message`).
-5. Client polls `GET /api/images/:id` for status + signed result URL.
 
-Status state machine: `pending → uploaded → processing → completed | failed`. Persist `failed` jobs with an error message rather than throwing them away.
+Implementation note: `generate` runs **synchronously** and returns the signed result
+URL in its own response (it sets `status: processing` then `completed`). `GET /api/images/:id`
+exists as a status/poll fallback but the happy path doesn't need it. The orchestration
+lives in `src/lib/generateFlow.ts` (client) calling create-upload → uploadToSignedUrl →
+mark-uploaded → generate.
+
+Status state machine: `pending → uploaded → processing → completed | failed`. Persist `failed` jobs with an error message rather than throwing them away. A failed generation does **not** burn quota — `countGenerationsToday` only counts `generation_success` usage_logs rows.
+
+**Device identity (not in the PRD):** there is no auth/login. Each install generates a
+random `device_code` stored in `localStorage` and calls `POST /api/device/register`, which
+get-or-creates a `devices` row. Single phone = single device. Parent mode binds to that
+device id via an HMAC-signed httpOnly cookie (`src/lib/parentAuth.ts`).
 
 ### Fail-closed cost control
 
@@ -50,7 +91,7 @@ The server **must** check eligibility before any OpenAI call (PRD §15). No gene
 ## Two modes, two different UIs
 
 - **Child mode** — one obvious action per screen, big tactile buttons (≥72px tap targets), icon-first, minimal text, no scrolling where avoidable. **Never add a freeform prompt box, text input, sharing, links, or ads to child mode** — this is a safety requirement (PRD §14), not a preference. Presets are the only way a child influences generation.
-- **Parent mode** — PIN-gated (entered via a hidden gesture: long-press logo 3s or tap top-right 5×). Standard dashboard. Destructive actions require confirmation. Calmer palette (paper-white surfaces, yellow reserved for save/confirm).
+- **Parent mode** — PIN-gated, reached via a hidden gesture: **3-second long-press on the home logo** (`HiddenParentAccess.tsx`). On first entry with no PIN set, the gate switches to "create PIN" (`/api/parent/setup`); afterwards it's "enter PIN" (`/api/parent/login`). Standard dashboard, destructive actions confirm, calmer palette.
 
 ## Preset prompts are safety-critical
 
@@ -58,11 +99,14 @@ The 6 initial presets (Superhero, Dinosaur World, Space Explorer, Storybook, Rob
 
 ## Design system
 
-Use the tokens, don't reinvent them. Tailwind extension snippet is ready in `design/tailwind-theme-snippet.js`; CSS variables in `design/magic-camera-theme.css`; raw values in `design/design-tokens.json`.
+Tokens live in `tailwind.config.js` (colors, `rounded-toy`, `shadow-toy`) and CSS
+variables + component classes (`.btn-primary`, `.preset-tile`, `.panel`, `.toy-card`,
+`.animate-sparkle`) in `src/app/globals.css`. The `design/` originals are git-ignored —
+edit the config/globals, not `design/`.
 
 Palette: `camera-blue #71CCE2`, `camera-blue-light #94D6EB`, `magic-yellow #F6D42E` (primary buttons), `magic-yellow-light #F9DD53`, `charcoal #19222B` (text/frame), `slate #364653`, `soft-slate #505862`, `paper-white #FFF9E8`.
 
-Feel: rounded toy panels, large pill buttons, slight 3D/tactile depth (`shadow.toy` token), gentle motion only (button bounce, loading sparkle). Avoid fast flashing, complex animation, scary effects.
+Feel: rounded toy panels, large pill buttons, slight 3D/tactile depth (`shadow-toy`), gentle motion only (button bounce, loading sparkle), and `prefers-reduced-motion` disables animation. Avoid fast flashing, complex animation, scary effects.
 
 ## Environment variables
 
@@ -76,6 +120,10 @@ PARENT_PIN_SECRET=           # server only
 
 Only `NEXT_PUBLIC_*` may reach the browser. Store the parent PIN as a hash (`parent_settings.parent_pin_hash`).
 
-## Build order
+## Status vs PRD
 
-Follow the PRD §19 milestones — Phase 1 proves the image pipeline end-to-end (capture → upload → generate → store → display signed URL) before gallery (Phase 2), parent controls (Phase 3), or PWA/child polish (Phase 4). Don't build parent UI before the pipeline works.
+PRD §19 milestones 1–4 are all implemented (pipeline, gallery + metadata, parent
+controls, PWA install/icons). Deferred future-work (PRD §11/§22) that is *stored but
+not yet active*: the auto-delete retention days are saved in `parent_settings` but no
+scheduled cleanup job runs them yet. If asked to "finish" or extend, that scheduled
+cleanup (a cron/Edge Function reading the retention settings) is the main open item.

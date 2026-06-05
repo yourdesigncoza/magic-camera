@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Magic Camera — Offline</title>
+    <style>
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 16px; padding: 24px; text-align: center;
+        background: #71cce2; color: #19222b;
+        font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      }
+      .emoji { font-size: 72px; }
+      h1 { font-size: 24px; margin: 0; }
+      p { color: #364653; max-width: 18rem; }
+      button {
+        min-height: 64px; padding: 0 28px; border: 0; border-radius: 28px;
+        background: #f6d42e; color: #19222b; font-size: 20px; font-weight: 800;
+        box-shadow: 0 10px 0 rgba(25,34,43,0.22); cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="emoji">📷</div>
+    <h1>No internet</h1>
+    <p>Magic Camera needs the internet to make magic. Try again in a moment.</p>
+    <button onclick="location.href='/'">Try again</button>
+  </body>
+</html>
