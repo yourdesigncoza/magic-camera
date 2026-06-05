@@ -87,7 +87,23 @@ Implementation note: `generate` runs **synchronously** and returns the signed re
 URL in its own response (it sets `status: processing` then `completed`). `GET /api/images/:id`
 exists as a status/poll fallback but the happy path doesn't need it. The orchestration
 lives in `src/lib/generateFlow.ts` (client) calling create-upload → uploadToSignedUrl →
-mark-uploaded → generate.
+mark-uploaded → generate. The server-side core (download original → edit → store honouring
+save_generated/save_originals → mark completed) is shared in `src/lib/generation.ts`
+(`generateAndStore`), used by both `/generate` and `/surprise`.
+
+Output is **compressed WebP at `quality: low`** (`src/lib/openai.ts`) — cheap + small, per
+PRD §15. Override via `OPENAI_IMAGE_QUALITY` / `OPENAI_IMAGE_MODEL`. Every prompt is wrapped
+with source-photo framing + the child-safety suffix at the model boundary.
+
+Two extra generation modes (ported from `openai/imagegencam`), both device-token auth +
+quota-reserved like `/generate`:
+- **`/api/images/surprise`** — a vision model (`MAGIC_PROMPT_MODEL`, default `gpt-4.1-mini`)
+  invents a child-safe custom style from the photo (`planSurprisePrompt`), then generates it.
+  The prompt is created + used server-side and never shown/typed — child mode stays
+  prompt-free (PRD §14). Surfaced as the "✨ Surprise Me" button.
+- **`/api/images/wallpaper`** — re-edits a stored generated image to a 9:16 (`1024x1536`)
+  wallpaper, returned as an inline data URL (not persisted). Disabled when the result is a
+  non-persisted data URL (save_generated off).
 
 Status state machine: `pending → uploaded → processing → completed | failed`. Persist `failed` jobs with an error message rather than throwing them away. A failed generation does **not** burn quota — `countGenerationsToday` only counts `generation_success` usage_logs rows.
 

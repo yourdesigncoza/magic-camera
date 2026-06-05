@@ -8,31 +8,33 @@ import {
 } from '@/lib/device';
 import { getRequestDeviceId } from '@/lib/deviceToken';
 import { getParentSettings } from '@/lib/parentAuth';
-import { createSignedRead } from '@/lib/storage';
+import { downloadObject } from '@/lib/storage';
+import { planSurprisePrompt } from '@/lib/openai';
 import { generateAndStore } from '@/lib/generation';
-import { BUCKET_GENERATED, EVENT_GENERATION_FAILED } from '@/lib/constants';
+import { BUCKET_ORIGINALS, EVENT_GENERATION_FAILED } from '@/lib/constants';
 import { jsonError, jsonOk } from '@/lib/http';
-import { ImageRow, PresetRow } from '@/lib/types';
+import { ImageRow } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60; // image generation can take 30–60s
+export const maxDuration = 60;
 
-// POST /api/images/generate { imageId, presetId }  (auth: x-device-token)
-// -> { status, imageId, url }. Runs server-side generation synchronously. Fails closed.
+// POST /api/images/surprise { imageId }  (auth: x-device-token)
+// A vision model invents a child-safe custom style from the photo, then the
+// normal pipeline generates it. -> { status, imageId, url, title }
 export async function POST(req: NextRequest) {
   const callerDeviceId = getRequestDeviceId(req);
   if (!callerDeviceId) return jsonError('Unauthorized', 401);
 
-  let body: { imageId?: string; presetId?: string };
+  let body: { imageId?: string };
   try {
     body = await req.json();
   } catch {
     return jsonError('Invalid JSON body');
   }
 
-  const { imageId, presetId } = body;
-  if (!imageId || !presetId) return jsonError('imageId and presetId are required');
+  const { imageId } = body;
+  if (!imageId) return jsonError('imageId is required');
 
   const db = supabaseAdmin();
 
@@ -45,30 +47,31 @@ export async function POST(req: NextRequest) {
   const image = imgRes.data as ImageRow | null;
   if (!image) return jsonError('Unknown image', 404);
   if (!image.original_path) return jsonError('Image is missing its original upload', 409);
-  if (image.status === 'completed') {
-    const url = await createSignedRead(BUCKET_GENERATED, image.generated_path);
-    return jsonOk({ status: 'completed', imageId, url });
-  }
 
   const device = await getDeviceById(callerDeviceId);
   if (!device) return jsonError('Unknown device', 404);
 
-  const presetRes = await db.from('presets').select('*').eq('id', presetId).maybeSingle();
-  const preset = presetRes.data as PresetRow | null;
-  if (!preset) return jsonError('Unknown preset', 404);
-  if (!preset.is_enabled) return jsonError('Preset is disabled', 409);
-
   const settings = await getParentSettings(device.id);
 
-  // Atomically reserve a quota slot before any paid work (race-safe).
   const reserved = await reserveGenerationSlot(device.id, imageId);
   if (!reserved) return jsonError('Daily limit reached', 429, { reason: 'limit_reached' });
 
-  await db.from('images').update({ status: 'processing', preset_id: presetId }).eq('id', imageId);
+  await db.from('images').update({ status: 'processing' }).eq('id', imageId);
 
   try {
-    const { url } = await generateAndStore({ image, device, settings, prompt: preset.prompt });
-    return jsonOk({ status: 'completed', imageId, url });
+    const original = await downloadObject(BUCKET_ORIGINALS, image.original_path);
+    const planned = await planSurprisePrompt(
+      original,
+      image.original_content_type || 'image/webp',
+    );
+    const { url } = await generateAndStore({
+      image,
+      device,
+      settings,
+      prompt: planned.prompt,
+      originalBytes: original,
+    });
+    return jsonOk({ status: 'completed', imageId, url, title: planned.title });
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Generation failed';
     await refundGenerationSlot(device.id, imageId);

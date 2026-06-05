@@ -8,8 +8,8 @@ export function originalPath(deviceId: string, imageId: string, ext = 'webp'): s
   return `${deviceId}/${imageId}/original.${ext}`;
 }
 
-export function generatedPath(deviceId: string, imageId: string): string {
-  return `${deviceId}/${imageId}/generated.png`;
+export function generatedPath(deviceId: string, imageId: string, ext = 'webp'): string {
+  return `${deviceId}/${imageId}/generated.${ext}`;
 }
 
 // Allow-list of upload content types → file extension. Anything else is rejected.

@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { registerDevice, DeviceInfo } from '@/lib/clientDevice';
 import { CapturedImage } from '@/lib/imageCapture';
-import { runGeneration, FlowError } from '@/lib/generateFlow';
+import { runGeneration, runSurprise, makeWallpaper, FlowError } from '@/lib/generateFlow';
 import { PublicPreset } from '@/lib/types';
 import { saveImage } from '@/lib/saveImage';
 import { cacheImageFromUrl } from '@/lib/localGallery';
@@ -21,6 +21,8 @@ export default function CameraApp() {
   const [presets, setPresets] = useState<PublicPreset[]>([]);
   const [captured, setCaptured] = useState<CapturedImage | null>(null);
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultId, setResultId] = useState<string | null>(null);
+  const [wallpaperBusy, setWallpaperBusy] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string>('');
 
   useEffect(() => {
@@ -50,6 +52,33 @@ export default function CameraApp() {
     setStep('preview');
   };
 
+  // Cache the result on-device so the gallery never re-downloads it.
+  const cacheResult = (
+    imageId: string,
+    url: string,
+    label: string | null,
+    emoji: string | null,
+  ) => {
+    cacheImageFromUrl(imageId, url, {
+      presetLabel: label,
+      presetEmoji: emoji,
+      createdAt: new Date().toISOString(),
+    }).catch(() => {
+      /* offline cache is best-effort */
+    });
+  };
+
+  const showResult = (imageId: string, url: string) => {
+    setResultId(imageId);
+    setResultUrl(url);
+    setStep('result');
+  };
+
+  const handleError = (err: unknown) => {
+    setErrorMsg(err instanceof FlowError ? err.message : 'Magic did not work. Try again!');
+    setStep('error');
+  };
+
   const handlePickPreset = async (presetId: string) => {
     if (!device || !captured) return;
     setStep('creating');
@@ -58,22 +87,40 @@ export default function CameraApp() {
         { blob: captured.blob, contentType: captured.contentType },
         presetId,
       );
-      setResultUrl(url);
-      // Cache the result on-device so the gallery never re-downloads it.
       const preset = presets.find((p) => p.id === presetId);
-      cacheImageFromUrl(imageId, url, {
-        presetLabel: preset?.label ?? null,
-        presetEmoji: preset?.emoji ?? null,
-        createdAt: new Date().toISOString(),
-      }).catch(() => {
-        /* offline cache is best-effort */
-      });
-      setStep('result');
+      cacheResult(imageId, url, preset?.label ?? null, preset?.emoji ?? null);
+      showResult(imageId, url);
     } catch (err) {
-      const msg =
-        err instanceof FlowError ? err.message : 'Magic did not work. Try again!';
-      setErrorMsg(msg);
+      handleError(err);
+    }
+  };
+
+  const handleSurprise = async () => {
+    if (!device || !captured) return;
+    setStep('creating');
+    try {
+      const { imageId, url, title } = await runSurprise({
+        blob: captured.blob,
+        contentType: captured.contentType,
+      });
+      cacheResult(imageId, url, title ?? 'Surprise', '✨');
+      showResult(imageId, url);
+    } catch (err) {
+      handleError(err);
+    }
+  };
+
+  const handleWallpaper = async () => {
+    if (!resultId || wallpaperBusy) return;
+    setWallpaperBusy(true);
+    try {
+      const url = await makeWallpaper(resultId);
+      await saveImage(url, `wallpaper-${Date.now()}.webp`);
+    } catch (err) {
+      setErrorMsg(err instanceof FlowError ? err.message : 'Could not make a wallpaper.');
       setStep('error');
+    } finally {
+      setWallpaperBusy(false);
     }
   };
 
@@ -155,9 +202,18 @@ export default function CameraApp() {
             📸 New
           </button>
         </div>
-        <button className="btn-secondary w-full" onClick={() => saveImage(resultUrl)}>
-          📤 Share Image
-        </button>
+        <div className="grid grid-cols-2 gap-3">
+          <button className="btn-secondary" onClick={() => saveImage(resultUrl)}>
+            📤 Share
+          </button>
+          <button
+            className="btn-secondary"
+            onClick={handleWallpaper}
+            disabled={wallpaperBusy || resultUrl.startsWith('data:')}
+          >
+            {wallpaperBusy ? 'Making…' : '📱 Wallpaper'}
+          </button>
+        </div>
         <Link href="/gallery" className="btn-secondary w-full">
           🖼️ My Gallery
         </Link>
@@ -186,6 +242,9 @@ export default function CameraApp() {
           ↺ Retake
         </button>
         <p className="px-1 text-lg font-extrabold text-charcoal">Pick your magic!</p>
+        <button className="btn-primary w-full" onClick={handleSurprise}>
+          ✨ Surprise Me!
+        </button>
         <PresetGrid presets={presets} onPick={handlePickPreset} />
       </div>
     );
