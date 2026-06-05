@@ -158,7 +158,7 @@ export default function GalleryPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <button className="btn-primary" onClick={() => saveImage(active.url)}>
-              💾 Save to Phone
+              📤 Share Image
             </button>
             <button className="btn-secondary" onClick={() => setActive(null)}>
               Close

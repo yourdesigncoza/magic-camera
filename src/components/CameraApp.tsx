@@ -156,7 +156,7 @@ export default function CameraApp() {
           </button>
         </div>
         <button className="btn-secondary w-full" onClick={() => saveImage(resultUrl)}>
-          💾 Save to Phone
+          📤 Share Image
         </button>
         <Link href="/gallery" className="btn-secondary w-full">
           🖼️ My Gallery
